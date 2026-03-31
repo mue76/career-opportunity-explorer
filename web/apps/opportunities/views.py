@@ -78,6 +78,11 @@ def analyze_skill_gap(request, pk):
     if not resume_text:
         return JsonResponse({"error": "이력서 정보가 없습니다. 다시 검색해주세요."}, status=400)
 
+    if len(resume_text.strip()) < 100:
+        return JsonResponse({
+            "error": "이력서 내용이 너무 짧습니다. 경력, 보유 기술, 프로젝트 경험 등을 구체적으로 입력해주세요. (최소 100자 이상)"
+        }, status=400)
+
     job_text = build_opportunity_text(opp)
 
     prompt = f"""다음 이력서와 채용공고를 비교하여 스킬 갭을 분석해주세요.
@@ -90,6 +95,11 @@ def analyze_skill_gap(request, pk):
 [이력서]
 {resume_text[:2000]}
 
+분석 원칙:
+- 반드시 이력서에 실제로 기재된 내용만 근거로 사용하세요.
+- 이력서에 명시되지 않은 내용은 추측하거나 지어내지 마세요.
+- 이력서 정보가 부족하여 판단하기 어려운 항목은 "이력서에 관련 정보 없음"으로 표기하세요.
+
 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
 {{
   "strengths": ["강점1", "강점2", "강점3"],
@@ -98,10 +108,10 @@ def analyze_skill_gap(request, pk):
   "summary": "한줄 총평"
 }}
 
-- strengths: 이력서에서 이 공고와 잘 맞는 강점 3가지 (구체적으로)
-- gaps: 이 공고에 지원하려면 보완해야 할 스킬/경험 3가지 (구체적으로)
-- readiness: 지원 준비도 0~100 (정수)
-- summary: 전체 평가 한 문장"""
+- strengths: 이력서에 기재된 내용 중 이 공고와 잘 맞는 강점 (최대 3가지, 근거가 없으면 항목 수를 줄이세요)
+- gaps: 이 공고에서 요구하지만 이력서에 없거나 부족한 스킬/경험 (최대 3가지)
+- readiness: 이력서 정보 기준 지원 준비도 0~100 (정보가 부족할수록 낮게, 정수)
+- summary: 이력서 충실도와 공고 적합성을 포함한 한 문장 총평"""
 
     try:
         from openai import OpenAI
