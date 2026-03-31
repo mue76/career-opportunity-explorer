@@ -125,11 +125,16 @@ python manage.py collect_opportunities --query "AI 개발" --pages 3 --embed
 ## Railway 배포 가이드
 
 ### 1. 저장소 준비
+1. GitHub에서 새 repository 생성 (New repository)
+2. 로컬에서 연결 후 push
+
 ```bash
-git init
+git clone https://github.com/<username>/<repo>.git
+cd <repo>
+# 또는 기존 디렉터리라면:
+git remote add origin https://github.com/<username>/<repo>.git
 git add .
 git commit -m "init"
-git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main
 ```
 
