@@ -1,0 +1,178 @@
+{% extends "opportunities/base.html" %}
+
+{% block title %}추천 결과 - 커리어 기회 탐색기{% endblock %}
+
+{% block content %}
+
+<!-- 결과 헤더 -->
+<div class="mb-8">
+  <div class="flex items-center justify-between mb-2">
+    <h1 class="text-2xl font-bold text-gray-900">추천 공고 {{ results|length }}건</h1>
+    <span class="text-sm text-gray-400">전체 {{ total_candidates }}건 중 분석</span>
+  </div>
+
+  <!-- 이력서 미리보기 -->
+  <div class="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-gray-600">
+    <span class="font-medium text-blue-700">분석된 이력서:</span>
+    {{ resume_preview }}{% if resume_preview|length >= 300 %}…{% endif %}
+  </div>
+
+  <div class="mt-3 flex gap-2">
+    <a href="{% url 'opportunities:home' %}"
+       class="text-sm text-blue-600 hover:underline">← 다시 검색</a>
+    {% if phase == "B" %}
+    <span class="text-sm text-gray-400">· AI 임베딩 기반 검색 (OpenAI text-embedding-3-large)</span>
+    {% else %}
+    <span class="text-sm text-gray-400">· 키워드 기반 검색</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 결과 카드 목록 -->
+{% if results %}
+<div class="space-y-4" id="results-container">
+  {% for r in results %}
+  {% with opp=r.opportunity %}
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden" id="card-{{ opp.pk }}">
+
+    <!-- 카드 헤더 -->
+    <div class="p-5">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <!-- 매칭 점수 -->
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
+              {% if r.score >= 70 %}bg-green-100 text-green-700
+              {% elif r.score >= 55 %}bg-blue-100 text-blue-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">
+              매칭 {{ r.score }}점
+            </span>
+            <!-- 고용 형태 -->
+            {% if opp.type %}
+            <span class="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">{{ opp.type }}</span>
+            {% endif %}
+          </div>
+          <h2 class="text-base font-semibold text-gray-900 truncate">{{ opp.title }}</h2>
+          <p class="text-sm text-gray-500 mt-0.5">{{ opp.organization }}</p>
+        </div>
+        <!-- 공고 링크 -->
+        <a href="{{ opp.link }}" target="_blank" rel="noopener"
+           class="flex-shrink-0 text-xs text-blue-600 hover:underline whitespace-nowrap mt-1">
+          공고 보기 ↗
+        </a>
+      </div>
+
+      <!-- 매칭 키워드 -->
+      {% if r.matched_keywords %}
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        {% for kw in r.matched_keywords %}
+        <span class="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full">{{ kw }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- 추천 이유 -->
+      <p class="mt-2 text-xs text-gray-500">{{ r.reason }}</p>
+    </div>
+
+    <!-- 스킬 갭 분석 버튼 -->
+    <div class="px-5 pb-4">
+      <button
+        onclick="analyzeSkillGap({{ opp.pk }}, this)"
+        class="w-full border border-blue-200 text-blue-600 hover:bg-blue-50 text-sm font-medium py-2 rounded-lg transition-colors">
+        🔍 스킬 갭 분석
+      </button>
+    </div>
+
+    <!-- 스킬 갭 분석 결과 (초기 숨김) -->
+    <div id="gap-{{ opp.pk }}" class="hidden border-t border-gray-100 bg-gray-50 p-5"></div>
+
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-20 text-gray-400">
+  <div class="text-5xl mb-4">🔍</div>
+  <p class="text-lg font-medium text-gray-500">매칭되는 공고를 찾지 못했습니다</p>
+  <p class="text-sm mt-2">이력서 내용을 더 구체적으로 작성해보세요.</p>
+  <a href="{% url 'opportunities:home' %}" class="mt-4 inline-block text-blue-600 hover:underline text-sm">← 다시 검색</a>
+</div>
+{% endif %}
+
+<script>
+function analyzeSkillGap(pk, btn) {
+  const resultDiv = document.getElementById('gap-' + pk);
+
+  // 이미 분석된 경우 토글
+  if (resultDiv.dataset.loaded === 'true') {
+    resultDiv.classList.toggle('hidden');
+    btn.textContent = resultDiv.classList.contains('hidden') ? '🔍 스킬 갭 분석' : '▲ 접기';
+    return;
+  }
+
+  btn.textContent = '분석 중...';
+  btn.disabled = true;
+
+  fetch(`/opportunities/${pk}/analyze/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      resultDiv.innerHTML = `<p class="text-red-500 text-sm">${data.error}</p>`;
+    } else {
+      const readinessColor = data.readiness >= 70 ? 'text-green-600' : data.readiness >= 50 ? 'text-blue-600' : 'text-orange-500';
+      resultDiv.innerHTML = `
+        <div class="space-y-4">
+          <!-- 준비도 -->
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-gray-700">지원 준비도</span>
+            <div class="flex-1 bg-gray-200 rounded-full h-2">
+              <div class="h-2 rounded-full ${data.readiness >= 70 ? 'bg-green-500' : data.readiness >= 50 ? 'bg-blue-500' : 'bg-orange-400'}"
+                   style="width: ${data.readiness}%"></div>
+            </div>
+            <span class="text-sm font-bold ${readinessColor}">${data.readiness}%</span>
+          </div>
+          <!-- 총평 -->
+          <p class="text-sm text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">${data.summary}</p>
+          <!-- 강점 / 갭 -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <h4 class="text-xs font-semibold text-green-700 mb-2">강점</h4>
+              <ul class="space-y-1">
+                ${(data.strengths || []).map(s => `<li class="text-xs text-gray-600 flex gap-1.5"><span class="text-green-500 flex-shrink-0">✓</span>${s}</li>`).join('')}
+              </ul>
+            </div>
+            <div>
+              <h4 class="text-xs font-semibold text-orange-600 mb-2">보완할 점</h4>
+              <ul class="space-y-1">
+                ${(data.gaps || []).map(g => `<li class="text-xs text-gray-600 flex gap-1.5"><span class="text-orange-400 flex-shrink-0">△</span>${g}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+        </div>`;
+    }
+    resultDiv.dataset.loaded = 'true';
+    resultDiv.classList.remove('hidden');
+    btn.textContent = '▲ 접기';
+    btn.disabled = false;
+  })
+  .catch(() => {
+    resultDiv.innerHTML = '<p class="text-red-500 text-sm">분석 중 오류가 발생했습니다.</p>';
+    resultDiv.classList.remove('hidden');
+    btn.textContent = '🔍 스킬 갭 분석';
+    btn.disabled = false;
+  });
+}
+
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+}
+</script>
+
+{% endblock %}

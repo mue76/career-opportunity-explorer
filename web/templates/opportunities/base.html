@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}커리어 기회 탐색기{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { 50:'#eff6ff', 100:'#dbeafe', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8' } }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- 헤더 -->
+  <header class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="{% url 'opportunities:home' %}" class="flex items-center gap-2">
+        <span class="text-2xl">🔍</span>
+        <span class="font-bold text-lg text-gray-800">커리어 기회 탐색기</span>
+      </a>
+      <nav class="flex gap-4 text-sm text-gray-600">
+        <a href="{% url 'opportunities:home' %}" class="hover:text-blue-600 transition-colors">이력서 검색</a>
+        <a href="{% url 'opportunities:list' %}" class="hover:text-blue-600 transition-colors">전체 공고</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 본문 -->
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- 푸터 -->
+  <footer class="border-t border-gray-200 mt-16 py-6 text-center text-sm text-gray-400">
+    커리어 기회 탐색기 · 사람인 공고 기반 AI 추천 서비스
+  </footer>
+
+</body>
+</html>

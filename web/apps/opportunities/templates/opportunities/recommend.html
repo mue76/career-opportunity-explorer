@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>추천 결과 — 커리어 기회 탐색기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 0; }
+    .container { max-width: 720px; margin: 60px auto; padding: 0 20px; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: #64748b; margin-bottom: 8px; font-size: 0.95rem; }
+    .meta { color: #94a3b8; font-size: 0.85rem; margin-bottom: 32px; }
+    .back { display: inline-block; color: #2563eb; text-decoration: none;
+            font-size: 0.9rem; margin-bottom: 24px; }
+    .back:hover { text-decoration: underline; }
+
+    /* 추천 카드 */
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 20px; margin-bottom: 16px; position: relative; }
+    .card:hover { border-color: #2563eb; box-shadow: 0 2px 8px #bfdbfe55; }
+    .rank { position: absolute; top: 18px; right: 18px;
+            font-size: 1.4rem; font-weight: 700; color: #cbd5e1; }
+    .rank.top { color: #f59e0b; }
+    .card-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; padding-right: 40px; }
+    .card-title a { color: #1d4ed8; text-decoration: none; }
+    .card-title a:hover { text-decoration: underline; }
+    .card-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 0.85rem; }
+    .badge { background: #f1f5f9; border-radius: 4px; padding: 3px 10px; color: #475569; }
+    .badge.type { background: #dbeafe; color: #1e40af; }
+    .badge.score { background: #dcfce7; color: #166534; font-weight: 600; }
+
+    /* 추천 이유 */
+    .reason { background: #f8fafc; border-left: 3px solid #2563eb;
+              border-radius: 0 6px 6px 0; padding: 10px 14px; margin-bottom: 12px;
+              font-size: 0.88rem; color: #334155; }
+    .reason-label { font-weight: 600; color: #2563eb; margin-bottom: 4px; }
+
+    /* 매칭 키워드 */
+    .keywords { display: flex; flex-wrap: wrap; gap: 6px; }
+    .kw-matched { background: #dcfce7; color: #166534; border-radius: 4px;
+                  padding: 2px 8px; font-size: 0.8rem; font-weight: 500; }
+    .kw-other   { background: #f1f5f9; color: #64748b; border-radius: 4px;
+                  padding: 2px 8px; font-size: 0.8rem; }
+
+    /* 결과 없음 */
+    .empty { text-align: center; padding: 60px 0; color: #94a3b8; }
+    .empty a { color: #2563eb; }
+
+    /* 이력서 미리보기 */
+    .preview { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+               padding: 14px; margin-bottom: 32px; font-size: 0.85rem;
+               color: #475569; white-space: pre-wrap; max-height: 100px;
+               overflow: hidden; position: relative; }
+    .preview::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+                      height: 32px; background: linear-gradient(transparent, #fff); }
+    .preview-label { font-size: 0.8rem; font-weight: 600; color: #94a3b8;
+                     text-transform: uppercase; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back" href="{% url 'opportunities:home' %}">← 다시 입력하기</a>
+
+    <h1>추천 결과</h1>
+    <p class="subtitle">
+      {% if results %}
+        {{ total_candidates }}건 중 이력서와 가장 잘 맞는 상위 {{ results|length }}개입니다.
+      {% else %}
+        매칭되는 공고가 없습니다.
+      {% endif %}
+    </p>
+    <p class="meta">
+      추천 방식:
+      {% if phase == "B" %}
+        임베딩 유사도 (Phase B)
+      {% else %}
+        키워드 매칭 (Phase A)
+      {% endif %}
+    </p>
+
+    {% if resume_preview %}
+    <div>
+      <div class="preview-label">입력된 이력서 (미리보기)</div>
+      <div class="preview">{{ resume_preview }}</div>
+    </div>
+    {% endif %}
+
+    {% if results %}
+      {% for r in results %}
+      <div class="card">
+        <div class="rank {% if forloop.counter == 1 %}top{% endif %}">
+          #{{ forloop.counter }}
+        </div>
+
+        <div class="card-title">
+          <a href="{{ r.opportunity.link }}" target="_blank" rel="noopener">
+            {{ r.opportunity.title }}
+          </a>
+        </div>
+
+        <div class="card-meta">
+          <span>🏢 {{ r.opportunity.organization }}</span>
+          {% if r.opportunity.type %}
+          <span class="badge type">{{ r.opportunity.type }}</span>
+          {% endif %}
+          {% if r.opportunity.note %}
+          <span class="badge">📅 {{ r.opportunity.note }}</span>
+          {% endif %}
+          <span class="badge score">매칭 {{ r.score }}%</span>
+        </div>
+
+        <div class="reason">
+          <div class="reason-label">추천 이유</div>
+          {{ r.reason }}
+        </div>
+
+        <div class="keywords">
+          {% for kw in r.opportunity.keywords %}
+            {% if kw in r.matched_keywords %}
+              <span class="kw-matched">✓ {{ kw }}</span>
+            {% else %}
+              <span class="kw-other">{{ kw }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+    {% else %}
+      <div class="empty">
+        <p>이력서와 매칭되는 공고가 없습니다.</p>
+        <p>다양한 기술 스택을 포함해서 <a href="{% url 'opportunities:home' %}">다시 시도</a>해보세요.</p>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

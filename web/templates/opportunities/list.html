@@ -1,0 +1,89 @@
+{% extends "opportunities/base.html" %}
+
+{% block title %}전체 공고 - 커리어 기회 탐색기{% endblock %}
+
+{% block content %}
+
+<div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">전체 공고</h1>
+    <p class="text-sm text-gray-500 mt-1">총 {{ total }}건의 채용공고</p>
+  </div>
+  <a href="{% url 'opportunities:home' %}"
+     class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+    이력서로 검색하기
+  </a>
+</div>
+
+<!-- 검색 -->
+<form method="get" class="mb-6">
+  <div class="flex gap-2">
+    <input type="text" name="q" value="{{ query }}"
+           placeholder="공고 제목, 회사명, 직무 내용 검색..."
+           class="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <button type="submit"
+            class="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors">
+      검색
+    </button>
+    {% if query %}
+    <a href="{% url 'opportunities:list' %}"
+       class="border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm px-3 py-2.5 rounded-lg transition-colors">
+      초기화
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- 공고 목록 -->
+{% if opportunities %}
+<div class="space-y-3">
+  {% for opp in opportunities %}
+  <div class="bg-white rounded-xl border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          {% if opp.type %}
+          <span class="text-xs text-gray-400 border border-gray-200 rounded-full px-2 py-0.5">{{ opp.type }}</span>
+          {% endif %}
+          {% if opp.source %}
+          <span class="text-xs text-blue-400">{{ opp.source }}</span>
+          {% endif %}
+        </div>
+        <h2 class="text-sm font-semibold text-gray-900 truncate">{{ opp.title }}</h2>
+        <p class="text-xs text-gray-500 mt-0.5">{{ opp.organization }}</p>
+        {% if opp.keywords %}
+        <div class="mt-2 flex flex-wrap gap-1">
+          {% for kw in opp.keywords|slice:":5" %}
+          <span class="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{{ kw }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <a href="{{ opp.link }}" target="_blank" rel="noopener"
+         class="flex-shrink-0 text-xs text-blue-600 hover:underline whitespace-nowrap">
+        공고 보기 ↗
+      </a>
+    </div>
+    {% if opp.description %}
+    <p class="mt-2 text-xs text-gray-400 line-clamp-2">{{ opp.description|truncatechars:120 }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if total > 200 %}
+<p class="text-center text-sm text-gray-400 mt-6">상위 200건만 표시됩니다. 검색을 이용해 범위를 좁혀주세요.</p>
+{% endif %}
+
+{% else %}
+<div class="text-center py-20 text-gray-400">
+  <div class="text-5xl mb-4">📭</div>
+  <p class="text-lg font-medium text-gray-500">검색 결과가 없습니다</p>
+  {% if query %}
+  <p class="text-sm mt-2">"{{ query }}"에 해당하는 공고가 없습니다.</p>
+  <a href="{% url 'opportunities:list' %}" class="mt-3 inline-block text-blue-600 hover:underline text-sm">전체 공고 보기</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

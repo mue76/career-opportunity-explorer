@@ -1,0 +1,83 @@
+{% extends "opportunities/base.html" %}
+
+{% block title %}커리어 기회 탐색기 - 이력서 기반 공고 추천{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+
+  <!-- 히어로 -->
+  <div class="text-center mb-10">
+    <h1 class="text-3xl font-bold text-gray-900 mb-3">이력서로 딱 맞는 공고를 찾아드립니다</h1>
+    <p class="text-gray-500">이력서를 붙여넣거나 PDF를 업로드하면 AI가 가장 적합한 채용공고를 추천해드립니다.</p>
+  </div>
+
+  <!-- 오류 메시지 -->
+  {% if error %}
+  <div class="mb-6 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <!-- 입력 폼 -->
+  <form method="post" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-5">
+    {% csrf_token %}
+
+    <!-- 텍스트 입력 -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">이력서 텍스트</label>
+      <textarea
+        name="resume_text"
+        rows="10"
+        placeholder="이력서 내용을 여기에 붙여넣어 주세요.&#10;&#10;예)&#10;Python, Django, REST API 개발 경력 3년&#10;머신러닝 프로젝트 경험 (scikit-learn, PyTorch)&#10;AWS 인프라 운영..."
+        class="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+      ></textarea>
+    </div>
+
+    <!-- 구분선 -->
+    <div class="flex items-center gap-3 text-gray-400 text-sm">
+      <div class="flex-1 border-t border-gray-200"></div>
+      <span>또는</span>
+      <div class="flex-1 border-t border-gray-200"></div>
+    </div>
+
+    <!-- PDF 업로드 -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">PDF 업로드</label>
+      <label class="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg px-4 py-6 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+        <span class="text-2xl">📄</span>
+        <span class="text-sm text-gray-500" id="file-label">PDF 파일을 선택하거나 여기에 드래그하세요</span>
+        <input type="file" name="resume_pdf" accept=".pdf" class="hidden" id="pdf-input"
+               onchange="document.getElementById('file-label').textContent = this.files[0]?.name || 'PDF 파일을 선택하거나 여기에 드래그하세요'">
+      </label>
+      <p class="text-xs text-gray-400 mt-1">최대 10MB · 텍스트가 포함된 PDF만 지원</p>
+    </div>
+
+    <!-- 제출 버튼 -->
+    <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors text-sm"
+            onclick="this.textContent='분석 중...'; this.disabled=true; this.form.submit();">
+      공고 추천받기
+    </button>
+  </form>
+
+  <!-- 안내 -->
+  <div class="mt-8 grid grid-cols-3 gap-4 text-center text-sm text-gray-500">
+    <div class="bg-white rounded-xl border border-gray-100 p-4">
+      <div class="text-2xl mb-2">🤖</div>
+      <div class="font-medium text-gray-700">AI 의미 분석</div>
+      <div class="text-xs mt-1">단순 키워드가 아닌 문맥과 의미로 매칭</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-100 p-4">
+      <div class="text-2xl mb-2">📊</div>
+      <div class="font-medium text-gray-700">스킬 갭 분석</div>
+      <div class="text-xs mt-1">공고별 부족한 역량을 구체적으로 파악</div>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-100 p-4">
+      <div class="text-2xl mb-2">💼</div>
+      <div class="font-medium text-gray-700">{{ total_candidates|default:"3,000" }}+ 공고</div>
+      <div class="text-xs mt-1">사람인 실시간 채용공고 기반</div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
