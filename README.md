@@ -196,9 +196,9 @@ python migrate_to_railway.py
 
 이 프로젝트는 **Claude Code CLI** 로 개발했습니다.
 
-```bash
-# 설치 (Node.js 필요)
-npm install -g @anthropic/claude-code
+```powershell
+# Windows 설치 (PowerShell)
+irm https://claude.ai/install.ps1 | iex
 
 # 프로젝트 디렉터리에서 실행
 claude
