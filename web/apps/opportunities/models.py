@@ -1,4 +1,5 @@
 from django.db import models
+from pgvector.django import VectorField
 
 
 class Opportunity(models.Model):
@@ -11,8 +12,8 @@ class Opportunity(models.Model):
     note         = models.CharField(max_length=200, blank=True)   # 마감일
     source       = models.CharField(max_length=50, default="saramin")
     collected_at = models.DateTimeField(auto_now_add=True)
-    # Phase B: 임베딩 벡터 (float 리스트). None이면 아직 미계산.
-    embedding    = models.JSONField(null=True, blank=True, default=None)
+    # Phase B: pgvector 임베딩 (3072차원, text-embedding-3-large)
+    embedding    = VectorField(dimensions=3072, null=True, blank=True)
 
     class Meta:
         ordering = ["-collected_at"]

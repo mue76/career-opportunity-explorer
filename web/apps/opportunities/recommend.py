@@ -274,70 +274,69 @@ def embedding_match(resume_text: str, top_n: int = 5) -> list[dict]:
     return results
 
 
-# ── Phase B-2: 하이브리드 (임베딩 + BM25 RRF) ────────────────
+# ── Phase B-2: 하이브리드 (pgvector DB 검색 + BM25 RRF) ──────
 
-# RRF 상수 (k=60이 표준값; 클수록 하위 순위 영향력 감소)
 _RRF_K = 60
-# BM25 비중 (0~1). 높을수록 정확한 단어 일치 우선
 _BM25_WEIGHT = 0.4
-# 임베딩 비중
 _EMB_WEIGHT = 0.6
 
 
 def hybrid_match(resume_text: str, top_n: int = 5) -> list[dict]:
-    """임베딩 유사도 + BM25를 RRF로 합산한 하이브리드 검색."""
+    """pgvector DB 코사인 검색 + BM25 RRF 하이브리드.
+    임베딩을 Python 메모리에 올리지 않고 DB에서 직접 유사도 계산.
+    """
     if not resume_text.strip():
         return []
 
-    resume_lower = resume_text.lower()
-    resume_vec = np.array(compute_embedding(resume_text), dtype=np.float32)
-
-    # ── 임베딩 점수 계산 ──
-    emb_opps = list(Opportunity.objects.exclude(embedding=None))
-    if not emb_opps:
+    if not Opportunity.objects.exclude(embedding=None).exists():
         return keyword_match(resume_text, top_n)
 
-    opp_matrix = np.array([opp.embedding for opp in emb_opps])
-    emb_scores = opp_matrix @ resume_vec  # (N,)
+    resume_lower = resume_text.lower()
+    resume_vec = compute_embedding(resume_text)
 
-    # id → 임베딩 순위 매핑
-    emb_rank_map: dict[int, int] = {}
-    for rank, idx in enumerate(np.argsort(emb_scores)[::-1]):
-        opp = emb_opps[idx]
-        emb_rank_map[opp.id] = rank
+    # ── pgvector: DB에서 코사인 거리 계산 ──
+    from pgvector.django import CosineDistance
+    distance_threshold = 1 - SIMILARITY_THRESHOLD  # cosine distance = 1 - similarity
 
-    # ── BM25 점수 계산 ──
+    emb_candidates = list(
+        Opportunity.objects
+        .exclude(embedding=None)
+        .annotate(distance=CosineDistance('embedding', resume_vec))
+        .filter(distance__lt=distance_threshold)
+        .order_by('distance')
+        [:top_n * 10]
+    )
+
+    if not emb_candidates:
+        return keyword_match(resume_text, top_n)
+
+    emb_rank_map = {opp.id: rank for rank, opp in enumerate(emb_candidates)}
+
+    # ── BM25 순위 계산 ──
     bm25, bm25_opps = _get_bm25()
     query_tokens = _tokenize(resume_text)
     bm25_raw = bm25.get_scores(query_tokens)
-
-    # id → BM25 순위 매핑
-    bm25_rank_map: dict[int, int] = {}
+    bm25_rank_map = {}
     for rank, idx in enumerate(np.argsort(bm25_raw)[::-1]):
-        opp = bm25_opps[idx]
-        bm25_rank_map[opp.id] = rank
+        bm25_rank_map[bm25_opps[idx].id] = rank
 
-    # ── 임베딩 임계값 필터 + RRF 합산 ──
-    # 임계값 미달 공고는 임베딩 점수 기준으로 제외
-    emb_id_to_idx = {opp.id: i for i, opp in enumerate(emb_opps)}
+    # ── RRF 합산 ──
     candidates = []
-    for opp in emb_opps:
-        sim = float(emb_scores[emb_id_to_idx[opp.id]])
-        if sim < SIMILARITY_THRESHOLD:
-            continue
+    for opp in emb_candidates:
+        sim = float(1 - opp.distance)
         e_rank = emb_rank_map[opp.id]
-        b_rank = bm25_rank_map.get(opp.id, len(bm25_opps))  # BM25에 없으면 최하위
-        rrf = _EMB_WEIGHT / (_RRF_K + e_rank) + _BM25_WEIGHT / (_RRF_K + b_rank)
+        b_rank = bm25_rank_map.get(opp.id, len(bm25_opps))
         matched = [kw for kw in (opp.keywords or []) if kw.lower() in resume_lower]
-        keyword_bonus = len(matched) * KEYWORD_BONUS_PER_MATCH * 0.001  # RRF 스케일에 맞게 축소
-        candidates.append((rrf + keyword_bonus, sim, opp, matched))
+        rrf = _EMB_WEIGHT / (_RRF_K + e_rank) + _BM25_WEIGHT / (_RRF_K + b_rank)
+        bonus = len(matched) * KEYWORD_BONUS_PER_MATCH * 0.001
+        candidates.append((rrf + bonus, sim, opp, matched))
 
     candidates.sort(key=lambda x: -x[0])
 
     # ── 카테고리 다양성 적용 ──
     group_counts: dict[str, int] = {}
     results = []
-    for rrf_score, base_sim, opp, matched in candidates:
+    for _, base_sim, opp, matched in candidates:
         if len(results) >= top_n:
             break
         group = _primary_group(opp)
@@ -345,11 +344,10 @@ def hybrid_match(resume_text: str, top_n: int = 5) -> list[dict]:
             continue
         group_counts[group] = group_counts.get(group, 0) + 1
 
-        if matched:
-            reason = f"이력서와 의미적으로 유사합니다. 관련 키워드: {', '.join(matched)}"
-        else:
-            reason = "이력서 전체 내용과 의미적으로 유사한 공고입니다."
-
+        reason = (
+            f"이력서와 의미적으로 유사합니다. 관련 키워드: {', '.join(matched)}"
+            if matched else "이력서 전체 내용과 의미적으로 유사한 공고입니다."
+        )
         results.append({
             "opportunity": opp,
             "score": round(base_sim * 100, 1),
