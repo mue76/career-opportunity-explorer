@@ -46,6 +46,48 @@ def extract_text_from_pdf(file_obj) -> str:
         return ""
 
 
+# ── 이력서 전처리 ─────────────────────────────────────────────
+
+def extract_resume_core(resume_text: str) -> str:
+    """GPT-4o-mini로 이력서 핵심 정보만 추출 (노이즈 제거).
+
+    임베딩 검색용으로만 사용. 원문은 스킬갭 분석에서 별도 사용.
+    이력서가 짧거나 API 오류 시 원문 그대로 반환.
+    """
+    if len(resume_text.strip()) < 200:
+        return resume_text  # 짧으면 전처리 불필요
+
+    try:
+        response = get_client().chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": f"""다음 이력서에서 채용 검색에 필요한 핵심 정보만 추출해주세요.
+
+[이력서]
+{resume_text[:4000]}
+
+아래 항목을 간결하게 정리해주세요 (없는 항목은 생략):
+- 직무/직군:
+- 경력 연차:
+- 보유 기술 스택:
+- 주요 프로젝트/업무 경험:
+- 자격증/학위:
+- 희망 직무:
+
+텍스트만 출력하고 다른 설명은 하지 마세요."""
+            }],
+            temperature=0.1,
+            max_tokens=500,
+        )
+        core = response.choices[0].message.content.strip()
+        logger.info("이력서 핵심 추출 완료 (%d자 → %d자)", len(resume_text), len(core))
+        return core
+    except Exception as exc:
+        logger.warning("이력서 핵심 추출 실패, 원문 사용: %s", exc)
+        return resume_text
+
+
 # ── 임베딩 유틸 ───────────────────────────────────────────────
 
 def build_opportunity_text(opp: Opportunity) -> str:
@@ -143,7 +185,9 @@ def recommend(resume_text: str, top_n: int = 5) -> tuple[list[dict], str]:
         phase_label: "A" 또는 "B"
     """
     if Opportunity.objects.filter(embedding__isnull=False).exists():
-        return hybrid_match(resume_text, top_n), "B"
+        # 임베딩 검색에는 핵심 정보만 추출한 텍스트 사용
+        core_text = extract_resume_core(resume_text)
+        return hybrid_match(core_text, top_n), "B"
     return keyword_match(resume_text, top_n), "A"
 
 
