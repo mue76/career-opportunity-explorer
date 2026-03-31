@@ -58,10 +58,6 @@ class Migration(migrations.Migration):
             new_name='embedding',
         ),
 
-        # 코사인 유사도 검색 인덱스 추가 (hnsw: ivfflat 2000차원 제한 없음)
-        migrations.RunSQL(
-            "CREATE INDEX IF NOT EXISTS opp_embedding_cosine_idx "
-            "ON opportunities_opportunity USING hnsw (embedding vector_cosine_ops)",
-            reverse_sql="DROP INDEX IF EXISTS opp_embedding_cosine_idx",
-        ),
+        # 참고: ivfflat/hnsw 모두 2000차원 제한 → 인덱스 없이 sequential scan 사용
+        # (3000건 규모에서는 sequential scan으로도 충분히 빠름)
     ]
