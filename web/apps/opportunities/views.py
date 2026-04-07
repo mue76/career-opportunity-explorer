@@ -74,58 +74,95 @@ def opportunity_list(request):
 @staff_member_required
 def analytics(request):
     """관리자 전용 데이터 분석 대시보드."""
+    import re
+    from itertools import combinations
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+
     opps = Opportunity.objects.all()
     total = opps.count()
     embedded = opps.filter(embedding__isnull=False).count()
 
-    # 키워드 빈도
-    all_kw = []
-    for kw_list in opps.values_list("keywords", flat=True):
-        all_kw.extend(kw_list or [])
+    # 모든 공고의 키워드 리스트 수집
+    all_kw_lists = [kw_list or [] for kw_list in opps.values_list("keywords", flat=True)]
+    all_kw = [kw for lst in all_kw_lists for kw in lst]
     kw_counter = Counter(all_kw)
+
+    # ── 1. 수요 키워드 Top 20 ──
     top_keywords = kw_counter.most_common(20)
 
-    # 고용형태 분포
-    type_counter = Counter(
-        t for t in opps.values_list("type", flat=True) if t
-    )
-    top_types = type_counter.most_common(10)
+    # ── 2. 스킬 조합 분석 (공동 출현 Top 15) ──
+    pair_counter = Counter()
+    for kw_list in all_kw_lists:
+        unique_kws = list(set(kw_list))
+        for a, b in combinations(sorted(unique_kws), 2):
+            pair_counter[(a, b)] += 1
+    top_pairs = [(f"{a} + {b}", cnt) for (a, b), cnt in pair_counter.most_common(15)]
 
-    # 기업별 공고 수 Top 15
-    org_counter = Counter(
-        o for o in opps.values_list("organization", flat=True) if o
-    )
-    top_orgs = org_counter.most_common(15)
+    # ── 3. 직군별 요구 스킬 매핑 ──
+    GROUPS = {
+        "AI/ML": ["AI(인공지능)", "머신러닝", "딥러닝", "LLM"],
+        "데이터": ["데이터엔지니어", "데이터분석가", "데이터 사이언티스트", "빅데이터"],
+        "백엔드": ["백엔드/서버개발", "풀스택", "Java", "Spring", "Django", "Python"],
+        "프론트엔드": ["프론트엔드", "React", "Vue.js", "Javascript"],
+        "클라우드/DevOps": ["AWS", "클라우드", "DevOps", "Docker", "Kubernetes"],
+        "교육": ["학원강사", "파트강사", "교육기획", "인공지능 강사", "K-Digital Training 강사"],
+    }
+    group_skill_map = {}
+    for group, trigger_kws in GROUPS.items():
+        group_opps = [lst for lst in all_kw_lists if any(k in lst for k in trigger_kws)]
+        group_all_kw = [kw for lst in group_opps for kw in lst if kw not in trigger_kws]
+        top = Counter(group_all_kw).most_common(8)
+        group_skill_map[group] = {"labels": [k for k, _ in top], "data": [v for _, v in top], "count": len(group_opps)}
 
-    # 날짜별 수집 추이 (최근 30일)
-    from django.db.models import Count
-    from django.db.models.functions import TruncDate
+    # ── 4. 신입 vs 경력 분석 ──
+    type_counter = Counter(t for t in opps.values_list("type", flat=True) if t)
+    # 신입/경력/신입·경력 등으로 그루핑
+    entry_count = sum(v for k, v in type_counter.items() if "신입" in k and "경력" not in k)
+    career_count = sum(v for k, v in type_counter.items() if "경력" in k and "신입" not in k)
+    both_count = sum(v for k, v in type_counter.items() if "신입" in k and "경력" in k)
+    other_count = total - entry_count - career_count - both_count
+    hire_type = {"신입": entry_count, "경력": career_count, "신입·경력": both_count, "기타": other_count}
+
+    # ── 5. 공고 제목 키워드 분석 ──
+    TITLE_STOPWORDS = {"및", "또는", "관련", "담당", "채용", "모집", "경력", "신입", "직원",
+                       "사원", "대리", "과장", "차장", "부장", "팀장", "매니저", "인턴",
+                       "정규직", "계약직", "파트", "타임", "시간", "근무", "업무", "지원"}
+    title_words = []
+    for title in opps.values_list("title", flat=True):
+        words = re.findall(r"[가-힣A-Za-z0-9+#]{2,}", title)
+        title_words.extend(w for w in words if w not in TITLE_STOPWORDS)
+    top_title_words = Counter(title_words).most_common(20)
+
+    # ── 6. AI 직군 상세 분해 ──
+    ai_opps_kws = [lst for lst in all_kw_lists if "AI(인공지능)" in lst]
+    ai_other_kws = [kw for lst in ai_opps_kws for kw in lst if kw != "AI(인공지능)"]
+    ai_skill_breakdown = Counter(ai_other_kws).most_common(15)
+
+    # ── 날짜별 수집 추이 ──
     daily = (
         opps.annotate(date=TruncDate("collected_at"))
-        .values("date")
-        .annotate(count=Count("id"))
-        .order_by("date")
+        .values("date").annotate(count=Count("id")).order_by("date")
     )
     daily_labels = [str(d["date"]) for d in daily]
     daily_counts = [d["count"] for d in daily]
 
-    # AI/교육 직군 상세
-    ai_keywords = ["AI(인공지능)", "머신러닝", "딥러닝", "LLM", "Pytorch", "TensorFlow"]
-    edu_keywords = ["학원강사", "파트강사", "교육기획", "인공지능 강사", "K-Digital Training 강사", "AI 캠퍼스 강사"]
-
-    ai_counts = {kw: kw_counter.get(kw, 0) for kw in ai_keywords}
-    edu_counts = {kw: kw_counter.get(kw, 0) for kw in edu_keywords}
+    # ── 기업별 공고 수 Top 15 ──
+    org_counter = Counter(o for o in opps.values_list("organization", flat=True) if o)
+    top_orgs = org_counter.most_common(15)
 
     return render(request, "opportunities/analytics.html", {
         "total": total,
         "embedded": embedded,
         "top_keywords": top_keywords,
-        "top_types": top_types,
-        "top_orgs": top_orgs,
+        "top_pairs": top_pairs,
+        "group_skill_map": json.dumps(group_skill_map),
+        "hire_type": hire_type,
+        "top_title_words": top_title_words,
+        "ai_skill_breakdown": ai_skill_breakdown,
         "daily_labels": json.dumps(daily_labels),
         "daily_counts": json.dumps(daily_counts),
-        "ai_counts": ai_counts,
-        "edu_counts": edu_counts,
+        "top_orgs": top_orgs,
     })
 
 

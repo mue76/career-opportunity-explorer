@@ -4,9 +4,11 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<div class="mb-6">
-  <h1 class="text-2xl font-bold text-gray-800">데이터 분석 대시보드</h1>
-  <p class="text-sm text-gray-500 mt-1">관리자 전용 · 사람인 공고 분석</p>
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-800">데이터 분석 대시보드</h1>
+    <p class="text-sm text-gray-500 mt-1">관리자 전용 · 사람인 공고 {{ total }}건 기반</p>
+  </div>
 </div>
 
 <!-- 요약 카드 -->
@@ -20,149 +22,201 @@
     <div class="text-sm text-gray-500 mt-1">임베딩 완료</div>
   </div>
   <div class="bg-white rounded-xl shadow-sm p-5 text-center border border-gray-100">
-    <div class="text-3xl font-bold text-purple-600">{{ total|add:"-"|add:embedded|default:0 }}</div>
-    <div class="text-sm text-gray-500 mt-1">임베딩 미완료</div>
+    <div class="text-3xl font-bold text-purple-600">{{ total }}</div>
+    <div class="text-sm text-gray-500 mt-1">분석 대상</div>
   </div>
 </div>
 
-<!-- 수집 추이 -->
+<!-- 섹션 1: 수집 추이 -->
 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
-  <h2 class="text-base font-semibold text-gray-700 mb-4">날짜별 수집 추이</h2>
-  <canvas id="dailyChart" height="80"></canvas>
+  <h2 class="text-base font-semibold text-gray-700 mb-1">날짜별 수집 추이</h2>
+  <p class="text-xs text-gray-400 mb-4">언제 어느 시점에 데이터가 수집됐는지</p>
+  <canvas id="dailyChart" height="70"></canvas>
 </div>
 
-<!-- 키워드 Top 20 + 고용형태 -->
+<!-- 섹션 2: 수요 키워드 + 신입/경력 -->
 <div class="grid grid-cols-2 gap-6 mb-6">
   <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">수요 키워드 Top 20</h2>
-    <canvas id="keywordChart" height="220"></canvas>
+    <h2 class="text-base font-semibold text-gray-700 mb-1">수요 키워드 Top 20</h2>
+    <p class="text-xs text-gray-400 mb-4">공고에 가장 많이 등장하는 기술/직군 태그</p>
+    <canvas id="keywordChart" height="260"></canvas>
   </div>
   <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">고용형태 분포</h2>
-    <canvas id="typeChart" height="220"></canvas>
+    <h2 class="text-base font-semibold text-gray-700 mb-1">신입 vs 경력 수요 비율</h2>
+    <p class="text-xs text-gray-400 mb-4">고용형태 분류 기반 — 신입 진입 가능성 파악</p>
+    <div class="flex justify-center mt-4">
+      <canvas id="hireTypeChart" height="200" style="max-width:300px"></canvas>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+      {% for label, cnt in hire_type.items %}
+      <div class="flex justify-between bg-gray-50 rounded px-3 py-1">
+        <span class="text-gray-600">{{ label }}</span>
+        <span class="font-semibold text-gray-800">{{ cnt }}</span>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
-<!-- 기업별 공고 수 -->
+<!-- 섹션 3: 스킬 조합 분석 -->
 <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
-  <h2 class="text-base font-semibold text-gray-700 mb-4">기업별 공고 수 Top 15</h2>
-  <canvas id="orgChart" height="80"></canvas>
+  <h2 class="text-base font-semibold text-gray-700 mb-1">스킬 조합 분석 — 함께 요구되는 기술 Top 15</h2>
+  <p class="text-xs text-gray-400 mb-4">같은 공고에 동시에 등장하는 키워드 쌍 → 실질적인 스킬 로드맵 힌트</p>
+  <canvas id="pairChart" height="80"></canvas>
 </div>
 
-<!-- AI/교육 직군 상세 -->
+<!-- 섹션 4: 직군별 요구 스킬 매핑 -->
+<div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+  <h2 class="text-base font-semibold text-gray-700 mb-1">직군별 요구 스킬 매핑</h2>
+  <p class="text-xs text-gray-400 mb-4">각 직군 공고에서 함께 요구되는 기술 — 직군 전환 시 준비할 스킬 파악</p>
+  <div class="flex gap-2 mb-4 flex-wrap" id="groupTabs">
+    {% for group in "AI/ML,데이터,백엔드,프론트엔드,클라우드/DevOps,교육"|split:"," %}
+    <button onclick="showGroup('{{ group }}')"
+      id="tab-{{ group }}"
+      class="px-3 py-1 rounded-full text-sm border transition-colors group-tab
+             {% if forloop.first %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-600 border-gray-300 hover:border-blue-400{% endif %}">
+      {{ group }}
+    </button>
+    {% endfor %}
+  </div>
+  <div class="relative" style="height:220px">
+    <canvas id="groupChart"></canvas>
+  </div>
+  <p class="text-xs text-gray-400 mt-2" id="groupCount"></p>
+</div>
+
+<!-- 섹션 5: AI 직군 상세 + 공고 제목 키워드 -->
 <div class="grid grid-cols-2 gap-6 mb-6">
   <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">AI/ML 키워드 수요</h2>
-    <canvas id="aiChart" height="160"></canvas>
+    <h2 class="text-base font-semibold text-gray-700 mb-1">AI 직군 공고 상세 분해</h2>
+    <p class="text-xs text-gray-400 mb-4">"AI(인공지능)" 태그 공고에서 함께 요구되는 기술</p>
+    <canvas id="aiDetailChart" height="200"></canvas>
   </div>
   <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-    <h2 class="text-base font-semibold text-gray-700 mb-4">교육 직군 키워드 수요</h2>
-    <canvas id="eduChart" height="160"></canvas>
+    <h2 class="text-base font-semibold text-gray-700 mb-1">공고 제목 키워드 트렌드</h2>
+    <p class="text-xs text-gray-400 mb-4">채용 공고 제목에서 자주 등장하는 단어 — 포지션 이름 트렌드</p>
+    <canvas id="titleChart" height="200"></canvas>
   </div>
+</div>
+
+<!-- 섹션 6: 기업별 공고 수 -->
+<div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+  <h2 class="text-base font-semibold text-gray-700 mb-1">기업별 공고 수 Top 15</h2>
+  <p class="text-xs text-gray-400 mb-4">채용이 활발한 기업 — 타겟 기업 리스트 참고용</p>
+  <canvas id="orgChart" height="70"></canvas>
 </div>
 
 <script>
-const COLORS = [
-  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
   '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1',
   '#14b8a6','#f43f5e','#a855f7','#22c55e','#eab308',
-  '#0ea5e9','#d946ef','#64748b','#78716c','#71717a',
-];
+  '#0ea5e9','#d946ef','#64748b','#78716c','#71717a'];
 
-// 날짜별 추이
+// 1. 날짜별 추이
 new Chart(document.getElementById('dailyChart'), {
   type: 'line',
   data: {
     labels: {{ daily_labels|safe }},
-    datasets: [{
-      label: '수집 건수',
-      data: {{ daily_counts|safe }},
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59,130,246,0.08)',
-      fill: true,
-      tension: 0.3,
-      pointRadius: 3,
-    }]
+    datasets: [{ label: '수집 건수', data: {{ daily_counts|safe }},
+      borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)',
+      fill: true, tension: 0.3, pointRadius: 3 }]
   },
   options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
 });
 
-// 키워드 Top 20
+// 2. 수요 키워드
 new Chart(document.getElementById('keywordChart'), {
   type: 'bar',
   data: {
     labels: [{% for kw, cnt in top_keywords %}"{{ kw }}",{% endfor %}],
-    datasets: [{
-      data: [{% for kw, cnt in top_keywords %}{{ cnt }},{% endfor %}],
-      backgroundColor: COLORS,
-    }]
+    datasets: [{ data: [{% for kw, cnt in top_keywords %}{{ cnt }},{% endfor %}],
+      backgroundColor: COLORS }]
   },
-  options: {
-    indexAxis: 'y',
-    plugins: { legend: { display: false } },
-    scales: { x: { beginAtZero: true } }
-  }
+  options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
 });
 
-// 고용형태
-new Chart(document.getElementById('typeChart'), {
+// 3. 신입/경력
+new Chart(document.getElementById('hireTypeChart'), {
   type: 'doughnut',
   data: {
-    labels: [{% for t, cnt in top_types %}"{{ t }}",{% endfor %}],
-    datasets: [{
-      data: [{% for t, cnt in top_types %}{{ cnt }},{% endfor %}],
-      backgroundColor: COLORS,
-    }]
+    labels: [{% for label, cnt in hire_type.items %}"{{ label }}",{% endfor %}],
+    datasets: [{ data: [{% for label, cnt in hire_type.items %}{{ cnt }},{% endfor %}],
+      backgroundColor: ['#10b981','#3b82f6','#f59e0b','#94a3b8'] }]
   },
-  options: { plugins: { legend: { position: 'right' } } }
+  options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
 });
 
-// 기업별
+// 4. 스킬 조합
+new Chart(document.getElementById('pairChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for pair, cnt in top_pairs %}"{{ pair }}",{% endfor %}],
+    datasets: [{ data: [{% for pair, cnt in top_pairs %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#6366f1' }]
+  },
+  options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+});
+
+// 5. 직군별 요구 스킬
+const groupData = {{ group_skill_map|safe }};
+let groupChart = null;
+function showGroup(name) {
+  document.querySelectorAll('.group-tab').forEach(btn => {
+    btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+    btn.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+  });
+  const tab = document.getElementById('tab-' + name);
+  if (tab) {
+    tab.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+    tab.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+  }
+  const d = groupData[name];
+  if (!d) return;
+  document.getElementById('groupCount').textContent = `"${name}" 관련 공고 ${d.count}건 기준`;
+  if (groupChart) groupChart.destroy();
+  groupChart = new Chart(document.getElementById('groupChart'), {
+    type: 'bar',
+    data: {
+      labels: d.labels,
+      datasets: [{ data: d.data, backgroundColor: COLORS }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }, maintainAspectRatio: false }
+  });
+}
+showGroup('AI/ML');
+
+// 6. AI 직군 상세
+new Chart(document.getElementById('aiDetailChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for kw, cnt in ai_skill_breakdown %}"{{ kw }}",{% endfor %}],
+    datasets: [{ data: [{% for kw, cnt in ai_skill_breakdown %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#8b5cf6' }]
+  },
+  options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+});
+
+// 7. 공고 제목 키워드
+new Chart(document.getElementById('titleChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for kw, cnt in top_title_words %}"{{ kw }}",{% endfor %}],
+    datasets: [{ data: [{% for kw, cnt in top_title_words %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#f59e0b' }]
+  },
+  options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+});
+
+// 8. 기업별
 new Chart(document.getElementById('orgChart'), {
   type: 'bar',
   data: {
     labels: [{% for org, cnt in top_orgs %}"{{ org }}",{% endfor %}],
-    datasets: [{
-      label: '공고 수',
-      data: [{% for org, cnt in top_orgs %}{{ cnt }},{% endfor %}],
-      backgroundColor: '#3b82f6',
-    }]
+    datasets: [{ label: '공고 수', data: [{% for org, cnt in top_orgs %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#0ea5e9' }]
   },
   options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-});
-
-// AI/ML
-new Chart(document.getElementById('aiChart'), {
-  type: 'bar',
-  data: {
-    labels: [{% for kw, cnt in ai_counts.items %}"{{ kw }}",{% endfor %}],
-    datasets: [{
-      data: [{% for kw, cnt in ai_counts.items %}{{ cnt }},{% endfor %}],
-      backgroundColor: '#8b5cf6',
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    plugins: { legend: { display: false } },
-    scales: { x: { beginAtZero: true } }
-  }
-});
-
-// 교육
-new Chart(document.getElementById('eduChart'), {
-  type: 'bar',
-  data: {
-    labels: [{% for kw, cnt in edu_counts.items %}"{{ kw }}",{% endfor %}],
-    datasets: [{
-      data: [{% for kw, cnt in edu_counts.items %}{{ cnt }},{% endfor %}],
-      backgroundColor: '#10b981',
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    plugins: { legend: { display: false } },
-    scales: { x: { beginAtZero: true } }
-  }
 });
 </script>
 {% endblock %}
