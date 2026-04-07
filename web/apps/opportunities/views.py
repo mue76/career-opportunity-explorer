@@ -157,6 +157,7 @@ def analytics(request):
         "top_keywords": top_keywords,
         "top_pairs": top_pairs,
         "group_skill_map": json.dumps(group_skill_map),
+        "group_names": list(GROUPS.keys()),
         "hire_type": hire_type,
         "top_title_words": top_title_words,
         "ai_skill_breakdown": ai_skill_breakdown,

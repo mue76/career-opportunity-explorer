@@ -70,7 +70,7 @@
   <h2 class="text-base font-semibold text-gray-700 mb-1">직군별 요구 스킬 매핑</h2>
   <p class="text-xs text-gray-400 mb-4">각 직군 공고에서 함께 요구되는 기술 — 직군 전환 시 준비할 스킬 파악</p>
   <div class="flex gap-2 mb-4 flex-wrap" id="groupTabs">
-    {% for group in "AI/ML,데이터,백엔드,프론트엔드,클라우드/DevOps,교육"|split:"," %}
+    {% for group in group_names %}
     <button onclick="showGroup('{{ group }}')"
       id="tab-{{ group }}"
       class="px-3 py-1 rounded-full text-sm border transition-colors group-tab
