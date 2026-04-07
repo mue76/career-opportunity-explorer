@@ -1,6 +1,8 @@
 import json
 import os
+from collections import Counter
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_http_methods, require_POST
@@ -66,6 +68,64 @@ def opportunity_list(request):
         "opportunities": opportunities[:200],
         "query": q,
         "total": Opportunity.objects.count(),
+    })
+
+
+@staff_member_required
+def analytics(request):
+    """관리자 전용 데이터 분석 대시보드."""
+    opps = Opportunity.objects.all()
+    total = opps.count()
+    embedded = opps.filter(embedding__isnull=False).count()
+
+    # 키워드 빈도
+    all_kw = []
+    for kw_list in opps.values_list("keywords", flat=True):
+        all_kw.extend(kw_list or [])
+    kw_counter = Counter(all_kw)
+    top_keywords = kw_counter.most_common(20)
+
+    # 고용형태 분포
+    type_counter = Counter(
+        t for t in opps.values_list("type", flat=True) if t
+    )
+    top_types = type_counter.most_common(10)
+
+    # 기업별 공고 수 Top 15
+    org_counter = Counter(
+        o for o in opps.values_list("organization", flat=True) if o
+    )
+    top_orgs = org_counter.most_common(15)
+
+    # 날짜별 수집 추이 (최근 30일)
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+    daily = (
+        opps.annotate(date=TruncDate("collected_at"))
+        .values("date")
+        .annotate(count=Count("id"))
+        .order_by("date")
+    )
+    daily_labels = [str(d["date"]) for d in daily]
+    daily_counts = [d["count"] for d in daily]
+
+    # AI/교육 직군 상세
+    ai_keywords = ["AI(인공지능)", "머신러닝", "딥러닝", "LLM", "Pytorch", "TensorFlow"]
+    edu_keywords = ["학원강사", "파트강사", "교육기획", "인공지능 강사", "K-Digital Training 강사", "AI 캠퍼스 강사"]
+
+    ai_counts = {kw: kw_counter.get(kw, 0) for kw in ai_keywords}
+    edu_counts = {kw: kw_counter.get(kw, 0) for kw in edu_keywords}
+
+    return render(request, "opportunities/analytics.html", {
+        "total": total,
+        "embedded": embedded,
+        "top_keywords": top_keywords,
+        "top_types": top_types,
+        "top_orgs": top_orgs,
+        "daily_labels": json.dumps(daily_labels),
+        "daily_counts": json.dumps(daily_counts),
+        "ai_counts": ai_counts,
+        "edu_counts": edu_counts,
     })
 
 

@@ -1,0 +1,168 @@
+{% extends "opportunities/base.html" %}
+{% block title %}데이터 분석 대시보드{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-gray-800">데이터 분석 대시보드</h1>
+  <p class="text-sm text-gray-500 mt-1">관리자 전용 · 사람인 공고 분석</p>
+</div>
+
+<!-- 요약 카드 -->
+<div class="grid grid-cols-3 gap-4 mb-8">
+  <div class="bg-white rounded-xl shadow-sm p-5 text-center border border-gray-100">
+    <div class="text-3xl font-bold text-blue-600">{{ total }}</div>
+    <div class="text-sm text-gray-500 mt-1">전체 공고</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5 text-center border border-gray-100">
+    <div class="text-3xl font-bold text-green-600">{{ embedded }}</div>
+    <div class="text-sm text-gray-500 mt-1">임베딩 완료</div>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-5 text-center border border-gray-100">
+    <div class="text-3xl font-bold text-purple-600">{{ total|add:"-"|add:embedded|default:0 }}</div>
+    <div class="text-sm text-gray-500 mt-1">임베딩 미완료</div>
+  </div>
+</div>
+
+<!-- 수집 추이 -->
+<div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+  <h2 class="text-base font-semibold text-gray-700 mb-4">날짜별 수집 추이</h2>
+  <canvas id="dailyChart" height="80"></canvas>
+</div>
+
+<!-- 키워드 Top 20 + 고용형태 -->
+<div class="grid grid-cols-2 gap-6 mb-6">
+  <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">수요 키워드 Top 20</h2>
+    <canvas id="keywordChart" height="220"></canvas>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">고용형태 분포</h2>
+    <canvas id="typeChart" height="220"></canvas>
+  </div>
+</div>
+
+<!-- 기업별 공고 수 -->
+<div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 mb-6">
+  <h2 class="text-base font-semibold text-gray-700 mb-4">기업별 공고 수 Top 15</h2>
+  <canvas id="orgChart" height="80"></canvas>
+</div>
+
+<!-- AI/교육 직군 상세 -->
+<div class="grid grid-cols-2 gap-6 mb-6">
+  <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">AI/ML 키워드 수요</h2>
+    <canvas id="aiChart" height="160"></canvas>
+  </div>
+  <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <h2 class="text-base font-semibold text-gray-700 mb-4">교육 직군 키워드 수요</h2>
+    <canvas id="eduChart" height="160"></canvas>
+  </div>
+</div>
+
+<script>
+const COLORS = [
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+  '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1',
+  '#14b8a6','#f43f5e','#a855f7','#22c55e','#eab308',
+  '#0ea5e9','#d946ef','#64748b','#78716c','#71717a',
+];
+
+// 날짜별 추이
+new Chart(document.getElementById('dailyChart'), {
+  type: 'line',
+  data: {
+    labels: {{ daily_labels|safe }},
+    datasets: [{
+      label: '수집 건수',
+      data: {{ daily_counts|safe }},
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,0.08)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 3,
+    }]
+  },
+  options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+
+// 키워드 Top 20
+new Chart(document.getElementById('keywordChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for kw, cnt in top_keywords %}"{{ kw }}",{% endfor %}],
+    datasets: [{
+      data: [{% for kw, cnt in top_keywords %}{{ cnt }},{% endfor %}],
+      backgroundColor: COLORS,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true } }
+  }
+});
+
+// 고용형태
+new Chart(document.getElementById('typeChart'), {
+  type: 'doughnut',
+  data: {
+    labels: [{% for t, cnt in top_types %}"{{ t }}",{% endfor %}],
+    datasets: [{
+      data: [{% for t, cnt in top_types %}{{ cnt }},{% endfor %}],
+      backgroundColor: COLORS,
+    }]
+  },
+  options: { plugins: { legend: { position: 'right' } } }
+});
+
+// 기업별
+new Chart(document.getElementById('orgChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for org, cnt in top_orgs %}"{{ org }}",{% endfor %}],
+    datasets: [{
+      label: '공고 수',
+      data: [{% for org, cnt in top_orgs %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#3b82f6',
+    }]
+  },
+  options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+
+// AI/ML
+new Chart(document.getElementById('aiChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for kw, cnt in ai_counts.items %}"{{ kw }}",{% endfor %}],
+    datasets: [{
+      data: [{% for kw, cnt in ai_counts.items %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#8b5cf6',
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true } }
+  }
+});
+
+// 교육
+new Chart(document.getElementById('eduChart'), {
+  type: 'bar',
+  data: {
+    labels: [{% for kw, cnt in edu_counts.items %}"{{ kw }}",{% endfor %}],
+    datasets: [{
+      data: [{% for kw, cnt in edu_counts.items %}{{ cnt }},{% endfor %}],
+      backgroundColor: '#10b981',
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true } }
+  }
+});
+</script>
+{% endblock %}
